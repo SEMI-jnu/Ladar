@@ -9,7 +9,7 @@ Python Package Detection"*.
   script that runs the execute-phase repair against a bundled case
   package.
 - **model/** -- the downstream malicious-package detectors: TF-IDF
-  classifiers and a PA-adapted Nebula transformer.
+  classifiers and the PA-adapted Nebula implementation used in the experiments.
 - **data/** -- three complete malicious case packages
   (`safepackage`, `equests`, `r4quests`) with original source, LADAR's
   patched source, and the pre-/post-repair OpenSSF Package Analysis (PA)
@@ -31,6 +31,8 @@ release/
     pa_features.py                PA JSON -> token sequence
     tfidf_classifier.py           LR / KNN / SVM / RF / XGB
     nebula.py                     PA-adapted Nebula transformer
+    pa_nebula.py                  experimental PA-to-Nebula normalization
+    _nebula/                     reused Nebula components and MIT license
     run_detection_example.py      interface check
     __init__.py
   data/
@@ -87,6 +89,29 @@ the OpenSSF Package Analysis sandbox; the bundled reference logs under
 `data/pa_logs/*_ladar_execute.json` show the output of the full pipeline
 when PA is also rerun.
 
+This example demonstrates one execute-phase patch attempt. It does not
+include literal placeholder processing, retries after a failed syntax check,
+or the three-round PA rerun loop. The install-phase module provides error
+classification and prompt construction, not an installation runner. PA
+integration is required to reproduce analysis-completion rates; a successful
+syntax check alone is not a successful LADAR repair.
+
+### Prompt size limit (install phase)
+
+The install-phase prompt embeds the affected file up to
+`install_apr.PROMPT_FILE_CHAR_LIMIT` (12,000 characters), matching the
+configuration used for the reported results. In the full experimental
+pipeline, large base64 and binary literals are replaced by placeholders
+before this limit is applied, then restored after repair. That preprocessing
+step is not included in this example.
+
+Because the template asks for the complete corrected file, a file longer
+than the cap cannot be fully reproduced by the model.
+`TargetedPromptGenerator.generate_prompt` returns a `(prompt, truncated)`
+pair so callers can skip such files rather than accept a partial patch. In
+the reported runs the cap bound for 72 of 1,985 malicious install patches
+(3.6%); none of those produced a completed execution log.
+
 ### 3. Compare against the reference patch
 
 ```bash
@@ -123,8 +148,28 @@ This is an interface check for `model.pa_features` and
 classifier train/predict path on the bundled small corpus and writes
 per-document probabilities to `data/model_output/tfidf_lr_predictions.csv`.
 It is not a miniature replication of the paper's Table 8 numbers; the
-paper's evaluation uses 19,001 packages with 10-fold stratified cross-
-validation at the package level, which requires the full corpus. For
-paper-accurate hyperparameters (TF-IDF `min_df=20`, 200 SVD components,
-the five-classifier sweep) use `model.tfidf_classifier.train_and_eval`
-with the full corpus.
+paper's detection evaluation uses 14,422 packages from the larger collection
+of 19,001 packages. It uses 10-fold stratified cross-validation at the
+package level and requires the full evaluation corpus.
+
+For classical detection, convert each selected execution log with
+`model.pa_features.pa_execute_to_document`, then pass equally ordered
+document lists for ORIGIN and each repair scenario, together with the labels,
+to `model.tfidf_classifier.evaluate_scenarios`. Keep empty ORIGIN documents.
+The caller must apply the population and representative-log selection rules
+of manuscript Section 5.4 before this step. The evaluator shares the fold
+splits, fits the vocabulary only on ORIGIN training documents, reserves 15%
+of each outer training pool for validation, and chooses the decision threshold
+on validation F1. TF-IDF uses `min_df=10`, `max_df=0.98`, and
+`max_features=360000`; the five model settings match the experiment scripts.
+
+Nebula uses a separate serializer,
+`model.pa_features.pa_execute_to_nebula_document`, which retains package
+metadata and normalizes the execution events. Its `train_and_eval` function
+accepts one outer fold and the corresponding `origin_train_docs` in the same
+package order; it makes the same 15% validation split. Apply the same outer
+10-fold splits as the classical evaluation. The model, whitespace tokenizer
+and training components are reused under `model/_nebula/`, with their license.
+Defaults are 30 epochs, learning rate 0.0005, batch size 16, early stopping,
+and a validation-selected threshold. A reduced `epochs` value is only a
+functional check, not a reproduction of the reported performance.

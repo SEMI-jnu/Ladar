@@ -5,8 +5,8 @@ Two families are provided, aligned with Section 5.3 of the paper:
   {LR, KNN, SVM, RF, XGB}
 - ``nebula``: a PA-adapted Nebula transformer (schema mapping in Table 2)
 
-Both accept the same per-package "PA execute log" representation and a
-binary malicious/benign label.
+Both use per-package PA execution logs and binary labels. Classical models
+use pa_execute_to_document; Nebula uses pa_execute_to_nebula_document.
 """
 from . import tfidf_classifier, pa_features
 

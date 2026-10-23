@@ -82,9 +82,23 @@ def load_origin_stderr(path: Path) -> str:
         return stderr
 
 
+def package_path(base: Path, rel_path: str) -> Path:
+    """Accept only package-relative paths within the requested directory."""
+    relative = Path(rel_path)
+    if relative.is_absolute():
+        raise ValueError("Expected a package-relative path.")
+    target = (base / relative).resolve()
+    if not target.is_relative_to(base.resolve()):
+        raise ValueError("Path is outside the package directory.")
+    return target
+
+
 def read_package_file(rel_path: str) -> str:
     """Resolve a Stage-1 relative path against the shipped original tree."""
-    target = ORIGINAL_SRC / rel_path
+    try:
+        target = package_path(ORIGINAL_SRC, rel_path)
+    except ValueError:
+        return ""
     if target.is_file():
         return target.read_text(encoding="utf-8")
     return ""
@@ -128,7 +142,13 @@ def main() -> None:
         )
         print(f"[1] related_frames     = {frames_summary}")
 
-    target_path = ORIGINAL_SRC / rel_path
+    try:
+        target_path = package_path(ORIGINAL_SRC, rel_path)
+        out_path = package_path(OUTPUT_DIR, rel_path)
+    except ValueError as exc:
+        raise SystemExit(f"[!] Invalid Stage 1 file path: {exc}") from exc
+    if not target_path.is_file():
+        raise SystemExit("[!] Stage 1 file was not found in the original package.")
     source_text = target_path.read_text(encoding="utf-8")
 
     # Stage 2: assemble context, including caller/callee snippets when
@@ -166,7 +186,6 @@ def main() -> None:
         sys.exit(3)
 
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-    out_path = OUTPUT_DIR / rel_path
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(final_code, encoding="utf-8")
     print(f"[done] patched file written to {out_path}")

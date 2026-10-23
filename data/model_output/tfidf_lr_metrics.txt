@@ -1,2 +1,2 @@
 n_documents = 36  (malicious = 6, benign = 30)
-vocabulary = 26960 tokens, SVD components = 35
+vocabulary = 16707 tokens, SVD components = 35

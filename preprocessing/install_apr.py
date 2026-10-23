@@ -15,7 +15,10 @@ Components
     Builds an LLM repair prompt from a single label-agnostic template.
     Role and rules do not branch on the error category or the package
     label; the matched category is passed only through the error_type
-    placeholder in the prompt.
+    placeholder in the prompt. The affected file is embedded up to
+    PROMPT_FILE_CHAR_LIMIT characters, as in the reported experiments;
+    generate_prompt reports when that cap binds so the caller can skip
+    the file instead of accepting a partial patch.
 
 The categories are:
     1. parsing_error
@@ -32,7 +35,7 @@ The categories are:
 from __future__ import annotations
 
 import re
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 
 
 # ─────────────────────────────────────────────────────────────────────
@@ -247,6 +250,20 @@ class RefinedErrorMessageProcessor:
 # Prompt generation
 # ─────────────────────────────────────────────────────────────────────
 
+# The reported experiments embedded at most this many characters of the
+# affected file in the prompt. Large base64/binary literals are replaced by
+# placeholders before this cap is applied and restored after the patch is
+# returned, so the cap binds only on plain source text.
+#
+# Known limitation: the template asks for the COMPLETE corrected file, but a
+# file longer than the cap is only partially shown, so the model cannot
+# reproduce the tail. ``generate_prompt`` therefore reports whether the cap
+# bound; callers should skip such files rather than accept a partial patch.
+# In the reported runs the cap bound for 72 of 1,985 malicious install patches
+# (3.6%), none of which yielded a completed execution log.
+PROMPT_FILE_CHAR_LIMIT: int = 12_000
+
+
 class TargetedPromptGenerator:
     """Generates an LLM repair prompt for install-phase failures.
 
@@ -254,6 +271,9 @@ class TargetedPromptGenerator:
     not vary across error categories or between benign and malicious
     packages; category information is conveyed only through the
     ``error_type`` placeholder filled by ``RefinedErrorMessageProcessor``.
+
+    The affected file is embedded up to ``PROMPT_FILE_CHAR_LIMIT``
+    characters, matching the configuration used for the reported results.
     """
 
     PROMPT_TEMPLATE: str = """\
@@ -285,18 +305,26 @@ Return ONLY the corrected contents of `{file_path}` (no explanations, no markdow
         file_path: str,
         full_file_content: str,
         error_detail: str = "",
-    ) -> str:
+        char_limit: int = PROMPT_FILE_CHAR_LIMIT,
+    ) -> Tuple[str, bool]:
         """Fills the single unified template with the supplied fields.
 
         ``error_type`` flows into the ERROR INFO section as text; the
         role and rules do not branch on it.
+
+        Returns ``(prompt, truncated)``. When ``truncated`` is True the
+        file exceeded ``char_limit`` and its tail was not shown to the
+        model, so any returned patch is necessarily incomplete and should
+        be discarded rather than applied.
         """
-        return self.PROMPT_TEMPLATE.format(
+        truncated = len(full_file_content) > char_limit
+        prompt = self.PROMPT_TEMPLATE.format(
             error_type=error_type or "unknown",
             error_detail=error_detail,
             file_path=file_path,
-            full_file_content=full_file_content,
+            full_file_content=full_file_content[:char_limit],
         )
+        return prompt, truncated
 
 
 __all__ = [

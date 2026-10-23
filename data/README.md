@@ -1,7 +1,7 @@
 # Example data
 
-Real artifacts from the paper's experiments, sized to reproduce the
-LADAR pipeline on a laptop.
+Real artifacts from the paper's experiments, sized to inspect the repair
+and detection components on a laptop.
 
 ## Layout
 
@@ -31,13 +31,14 @@ data/
 
 | Case                 | ORIGIN error                                | Behavior revealed after repair                                 |
 | -------------------- | ------------------------------------------- | -------------------------------------------------------------- |
-| safepackage-1337.0.2 | `requests.ConnectTimeout`                   | file (`/etc/passwd`, `/root/.netrc`), webhook exfil, shell PoC |
+| safepackage-1337.0.2 | `requests.ConnectTimeout`                   | file access (`/etc/passwd`, `/root/.netrc`), DNS lookup for a webhook host, and a shell command |
 | equests-2.27.1       | `HTTPError 404: Not Found`                  | Monero mining (XMRig + supportxmr.com pool)                    |
 | r4quests-2.28.1      | `ModuleNotFoundError: No module 'frequest'` | Shared external infrastructure (`34.94.72.179:80`)             |
 
-Each case runs end-to-end through
+Each case can be used for one patch-generation attempt through
 [`preprocessing/run_apr_example.py`](../preprocessing/run_apr_example.py)
-(pass the package name as argv).
+(pass the package name as argv). This example does not rerun PA or reproduce
+the paper's repair-success evaluation.
 
 ## PA log schema
 

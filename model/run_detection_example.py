@@ -1,7 +1,7 @@
 """Interface check for the detection pipeline.
 
 This script is an interface sanity check, not a miniature replication of
-the paper's detection evaluation. The paper's results use 19,001 packages
+the paper's detection evaluation. The paper's detection results use 14,422 packages
 with 10-fold stratified cross-validation at the package level, which
 requires the full corpus.
 
@@ -18,8 +18,8 @@ What this script does:
 
 The classifier hyperparameters here are small-corpus-friendly
 (``min_df=1``, reduced SVD components). For paper-accurate settings
-(``min_df=20``, 200 SVD components, 5-classifier sweep), use
-``model.tfidf_classifier.train_and_eval`` with the full corpus.
+(``min_df=10``, 200 SVD components, 5-classifier sweep), use
+``model.tfidf_classifier.evaluate_scenarios`` with the aligned full corpus.
 
 Run:
     python model/run_detection_example.py

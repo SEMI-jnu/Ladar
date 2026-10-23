@@ -718,17 +718,17 @@ class Postprocessor:
         """Removes an outer pair of triple-backtick fences if present.
         Handles both bare ``` and ```python fences.
         """
-        s = text.strip()
-        if s.startswith("```python"):
-            s = s[len("```python"):].lstrip("\n")
-            if s.endswith("```"):
-                s = s[:-3].rstrip()
-            return s
-        if s.startswith("```") and s.endswith("```"):
-            parts = s.split("\n")
-            if len(parts) >= 2:
-                return "\n".join(parts[1:-1])
-        return s
+        # Keep indentation: the response may replace a class method or
+        # nested function. Only blank boundary lines and fences are removed.
+        lines = text.splitlines()
+        while lines and not lines[0].strip():
+            lines.pop(0)
+        while lines and not lines[-1].strip():
+            lines.pop()
+        if (len(lines) >= 2 and lines[0].strip() in ("```", "```python")
+                and lines[-1].strip() == "```"):
+            lines = lines[1:-1]
+        return "\n".join(lines)
 
     @staticmethod
     def validate_syntax(code: str) -> Tuple[bool, Optional[str]]:
